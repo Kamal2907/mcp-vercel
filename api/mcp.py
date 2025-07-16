@@ -48,6 +48,6 @@ async def mcp_search(payload: QueryRequest, request: Request):
             filter=payload.filters or {}
         )
 
-        return JSONResponse(content={"results": result["matches"]})
+        return JSONResponse(content={"results": [match.dict() for match in result.matches]})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
