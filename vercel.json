@@ -1,15 +1,11 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "api/mcp.py",
-      "use": "@vercel/python"
-    }
+    { "src": "api/mcp.py", "use": "@vercel/python" },
+    { "src": "index.html", "use": "@vercel/static" }
   ],
   "routes": [
-    {
-      "src": "/mcp",
-      "dest": "api/mcp.py"
-    }
+    { "src": "/mcp", "dest": "api/mcp.py" },
+    { "src": "/", "dest": "index.html" }
   ]
 }
