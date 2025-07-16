@@ -3,8 +3,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict
-import openai
 import os
+from openai import OpenAI  # ✅ New SDK client
 from pinecone import Pinecone
 
 app = FastAPI()
@@ -12,14 +12,14 @@ app = FastAPI()
 # ✅ CORSMiddleware for your Vercel frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ Replace with your actual deployed frontend URL
+    allow_origins=["*"],  # 🔒 Replace with your real frontend domain
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],  # Use wildcard if you're not sure what frontend sends
+    allow_headers=["*"],
 )
 
-# ✅ Environment variables
-openai.api_key = os.environ["OPENAI_API_KEY"]
+# ✅ Initialize OpenAI & Pinecone clients
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
 index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
 
@@ -33,11 +33,14 @@ class QueryRequest(BaseModel):
 @app.post("/mcp")
 async def mcp_search(payload: QueryRequest, request: Request):
     try:
-        embed = openai.Embedding.create(
+        # ✅ New SDK method to generate embeddings
+        response = client.embeddings.create(
             input=payload.query,
             model="text-embedding-3-small"
-        )["data"][0]["embedding"]
+        )
+        embed = response.data[0].embedding
 
+        # ✅ Query Pinecone
         result = index.query(
             vector=embed,
             top_k=payload.top_k,
