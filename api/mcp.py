@@ -18,10 +18,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Initialize OpenAI & Pinecone clients
+# ✅ Initialize OpenAI client
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
+
+# ✅ Initialize Pinecone client
+pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+pinecone_index_name = os.environ.get("PINECONE_INDEX_NAME")
+
+print("🔍 Pinecone API Key:", "SET" if pinecone_api_key else "NOT SET")
+print("🔍 Pinecone Index Name:", pinecone_index_name)
+
+pc = Pinecone(api_key=pinecone_api_key)
+index = pc.Index(pinecone_index_name)
+print("🔍 Index object:", index)
 
 # ✅ Request body model
 class QueryRequest(BaseModel):
@@ -33,12 +42,22 @@ class QueryRequest(BaseModel):
 @app.post("/mcp")
 async def mcp_search(payload: QueryRequest, request: Request):
     try:
-        # ✅ New SDK method to generate embeddings
+        print("📩 Incoming query:", payload.query)
+        print("📂 Filters:", payload.filters)
+        print("🔝 Top K:", payload.top_k)
+
+        # ✅ Generate embeddings using new SDK
         response = client.embeddings.create(
             input=payload.query,
             model="text-embedding-3-small"
         )
         embed = response.data[0].embedding
+        print("🧠 Embedding generated:", embed[:5], "...")  # Print first 5 values for brevity
+
+        # ✅ Check if index is valid
+        if index is None:
+            print("❌ Index is None!")
+            raise HTTPException(status_code=500, detail="Pinecone index is not initialized")
 
         # ✅ Query Pinecone
         result = index.query(
@@ -48,6 +67,12 @@ async def mcp_search(payload: QueryRequest, request: Request):
             filter=payload.filters or {}
         )
 
-        return JSONResponse(content={"results": [match.dict() for match in result.matches]})
+        print("✅ Query result:", result)
+
+        return JSONResponse(content={
+            "results": [match.dict() for match in result.matches]
+        })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
