@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict
 import openai
@@ -8,31 +9,43 @@ from pinecone import Pinecone  # ✅ new SDK import
 
 app = FastAPI()
 
-# Load ENV variables
+# ✅ Enable CORS (Cross-Origin Resource Sharing)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://vercel.com"],  # ✅ Your actual frontend domain
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],          # ✅ Commonly used methods for APIs
+    allow_headers=["Content-Type", "Authorization"],   # ✅ Typical headers needed for POST & auth
+)
+
+
+# ✅ Load API keys from environment
 openai.api_key = os.environ["OPENAI_API_KEY"]
+pinecone_api_key = os.environ["PINECONE_API_KEY"]
+pinecone_index_name = os.environ["PINECONE_INDEX_NAME"]
 
-# ✅ NEW Pinecone client instance (DO NOT use pinecone.init)
-pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+# ✅ Initialize Pinecone client and index
+pc = Pinecone(api_key=pinecone_api_key)
+index = pc.Index(pinecone_index_name)
 
-# ✅ Get the existing index
-index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
-
+# ✅ Define input model
 class QueryRequest(BaseModel):
     query: str
     filters: Optional[Dict] = None
     top_k: Optional[int] = 5
 
-# ✅ Route MUST match your vercel.json ("/" if src is "/mcp")
-@app.post("/")
+# ✅ MCP search endpoint
+@app.post("/mcp")
 async def mcp_search(payload: QueryRequest, request: Request):
     try:
-        # Generate embedding from OpenAI
-        embed = openai.Embedding.create(
+        # Generate OpenAI embedding
+        embedding_response = openai.Embedding.create(
             input=payload.query,
             model="text-embedding-3-small"
-        )["data"][0]["embedding"]
+        )
+        embed = embedding_response["data"][0]["embedding"]
 
-        # Query Pinecone index
+        # Query Pinecone
         result = index.query(
             vector=embed,
             top_k=payload.top_k,
