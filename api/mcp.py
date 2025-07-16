@@ -70,8 +70,15 @@ async def mcp_search(payload: QueryRequest, request: Request):
         print("✅ Query result:", result)
 
         return JSONResponse(content={
-            "results": [match.dict() for match in result.matches]
-        })
+    "results": [
+        {
+            "id": match.id,
+            "score": match.score,
+            "metadata": match.metadata
+        }
+        for match in result.matches
+    ]
+})
     except Exception as e:
         import traceback
         traceback.print_exc()
