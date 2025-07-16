@@ -8,7 +8,7 @@ import os
 
 app = FastAPI()
 
-# ENV Vars
+# Load ENV variables
 openai.api_key = os.environ["OPENAI_API_KEY"]
 pinecone.init(api_key=os.environ["PINECONE_API_KEY"], environment=os.environ["PINECONE_ENV"])
 index = pinecone.Index(os.environ["PINECONE_INDEX_NAME"])
@@ -18,14 +18,17 @@ class QueryRequest(BaseModel):
     filters: Optional[Dict] = None
     top_k: Optional[int] = 5
 
-@app.post("/mcp")
+# ✅ IMPORTANT: Route must be "/" (not /mcp)
+@app.post("/")
 async def mcp_search(payload: QueryRequest, request: Request):
     try:
+        # Generate embedding
         embed = openai.Embedding.create(
             input=payload.query,
             model="text-embedding-3-small"
         )["data"][0]["embedding"]
 
+        # Query Pinecone
         result = index.query(
             vector=embed,
             top_k=payload.top_k,
@@ -37,4 +40,3 @@ async def mcp_search(payload: QueryRequest, request: Request):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
