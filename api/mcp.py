@@ -58,6 +58,7 @@ async def mcp_search(payload: QueryRequest, request: Request):
             vector=embed,
             top_k=payload.top_k,
             include_values=True,
+            include_metadata=True,
             filter=payload.filters or {}
         )
 
