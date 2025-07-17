@@ -25,8 +25,11 @@ pinecone_index_name = os.environ.get("PINECONE_INDEX_NAME")
 print("🔍 Pinecone API Key:", "SET" if pinecone_api_key else "NOT SET")
 print("🔍 Pinecone Index Name:", pinecone_index_name)
 
+if not pinecone_api_key or not pinecone_index_name:
+    raise RuntimeError("Missing Pinecone API key or index name in environment variables.")
+
 pc = Pinecone(api_key=pinecone_api_key)
-index = pc.Index(pinecone_index_name)
+index = pc.Index(name=pinecone_index_name)
 print("🔍 Index object:", index)
 
 class QueryRequest(BaseModel):
@@ -54,11 +57,11 @@ async def mcp_search(payload: QueryRequest, request: Request):
         result = index.query(
             vector=embed,
             top_k=payload.top_k,
-            include_metadata=True,
+            include_values=True,
             filter=payload.filters or {}
         )
 
-        print("✅ Query result:", result)
+        # print("✅ Query result:", result)
 
         matches = result.matches or []
         return JSONResponse(content={
