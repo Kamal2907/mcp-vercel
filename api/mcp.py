@@ -10,6 +10,7 @@ from pinecone import Pinecone
 
 app = FastAPI()
 
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,8 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# OpenAI client
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
+# Pinecone setup
 pinecone_api_key = os.environ.get("PINECONE_API_KEY")
 pinecone_index_name = os.environ.get("PINECONE_INDEX_NAME")
 
@@ -33,25 +36,27 @@ pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(name=pinecone_index_name)
 print("🔍 Index object:", index)
 
-# GA4 Measurement Protocol setup
+# GA4 setup
 GA4_MEASUREMENT_ID = os.environ.get("GA4_MEASUREMENT_ID")
 GA4_API_SECRET = os.environ.get("GA4_API_SECRET")
 GA4_ENDPOINT = "https://www.google-analytics.com/mp/collect"
 
+# GA4 logging function
 async def log_to_google_analytics(query: str, ip: str = "0.0.0.0"):
     if not GA4_MEASUREMENT_ID or not GA4_API_SECRET:
         print("❌ GA4 credentials not set")
         return
 
     payload = {
-        "client_id": "api_user",
+        "client_id": "api_user_12345",  # Can be a random or UUID string
         "events": [
             {
                 "name": "mcp_api_request",
                 "params": {
                     "query": query,
                     "ip_override": ip,
-                    "source": "FastAPI"
+                    "source": "FastAPI",
+                    "debug_mode": True
                 }
             }
         ]
@@ -63,17 +68,20 @@ async def log_to_google_analytics(query: str, ip: str = "0.0.0.0"):
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(GA4_ENDPOINT, params=params, json=payload)
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(GA4_ENDPOINT, params=params, json=payload)
             print(f"📊 GA4 logged: {response.status_code}")
+            print(response.text)
     except Exception as e:
         print("❌ Error sending to GA4:", e)
 
+# Request model
 class QueryRequest(BaseModel):
     query: str
     filters: Optional[Dict] = None
     top_k: Optional[int] = 5
 
+# MCP endpoint
 @app.post("/mcp")
 async def mcp_search(payload: QueryRequest, request: Request):
     try:
@@ -84,6 +92,7 @@ async def mcp_search(payload: QueryRequest, request: Request):
         # Log to GA4
         await log_to_google_analytics(query=payload.query, ip=request.client.host)
 
+        # Create embedding
         response = client.embeddings.create(
             input=payload.query,
             model="text-embedding-3-small"
@@ -91,9 +100,7 @@ async def mcp_search(payload: QueryRequest, request: Request):
         embed = response.data[0].embedding
         print("🧠 Embedding generated:", embed[:5], "...")
 
-        if index is None:
-            raise HTTPException(status_code=500, detail="Pinecone index is not initialized")
-
+        # Pinecone query
         result = index.query(
             vector=embed,
             top_k=payload.top_k,
