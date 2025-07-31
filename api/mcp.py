@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict
 import os
+import httpx
 from openai import OpenAI
 from pinecone import Pinecone
 
@@ -32,6 +33,42 @@ pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(name=pinecone_index_name)
 print("🔍 Index object:", index)
 
+# GA4 Measurement Protocol setup
+GA4_MEASUREMENT_ID = os.environ.get("GA4_MEASUREMENT_ID")
+GA4_API_SECRET = os.environ.get("GA4_API_SECRET")
+GA4_ENDPOINT = "https://www.google-analytics.com/mp/collect"
+
+async def log_to_google_analytics(query: str, ip: str = "0.0.0.0"):
+    if not GA4_MEASUREMENT_ID or not GA4_API_SECRET:
+        print("❌ GA4 credentials not set")
+        return
+
+    payload = {
+        "client_id": "api_user",
+        "events": [
+            {
+                "name": "mcp_api_request",
+                "params": {
+                    "query": query,
+                    "ip_override": ip,
+                    "source": "FastAPI"
+                }
+            }
+        ]
+    }
+
+    params = {
+        "measurement_id": GA4_MEASUREMENT_ID,
+        "api_secret": GA4_API_SECRET
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(GA4_ENDPOINT, params=params, json=payload)
+            print(f"📊 GA4 logged: {response.status_code}")
+    except Exception as e:
+        print("❌ Error sending to GA4:", e)
+
 class QueryRequest(BaseModel):
     query: str
     filters: Optional[Dict] = None
@@ -43,6 +80,9 @@ async def mcp_search(payload: QueryRequest, request: Request):
         print("📩 Incoming query:", payload.query)
         print("📂 Filters:", payload.filters)
         print("🔝 Top K:", payload.top_k)
+
+        # Log to GA4
+        await log_to_google_analytics(query=payload.query, ip=request.client.host)
 
         response = client.embeddings.create(
             input=payload.query,
@@ -61,8 +101,6 @@ async def mcp_search(payload: QueryRequest, request: Request):
             include_metadata=True,
             filter=payload.filters or {}
         )
-
-        # print("✅ Query result:", result)
 
         matches = result.matches or []
         return JSONResponse(content={
