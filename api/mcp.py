@@ -48,15 +48,14 @@ async def log_to_google_analytics(query: str, ip: str = "0.0.0.0"):
         return
 
     payload = {
-        "client_id": "api_user_12345",  # Can be a random or UUID string
+        "client_id": "public_user",  # Can be a random or UUID string
         "events": [
             {
-                "name": "mcp_api_request",
+                "name": "public_mcp",
                 "params": {
                     "query": query,
                     "ip_override": ip,
-                    "source": "FastAPI",
-                    "debug_mode": True
+                    "source": "BCC"
                 }
             }
         ]
